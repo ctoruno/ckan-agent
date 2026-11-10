@@ -17,6 +17,8 @@ dependencies = [
     "langchain-mcp-adapters>=0.2.1",
     "python-dotenv>=1.2.1",
     "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
+    "deepagents>=0.7.19",
+    "httpx>=0.28.1",
 ]
 
 [build-system]
@@ -26,6 +28,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "hatchling>=1.28.0",
+    "pip-system-certs>=5.3",
     "pytest>=9.0.2",
 ]
 
@@ -35,6 +38,8 @@ setup = [
 
 [tool.uv]
 default-groups = ["dev", "setup"]
+native-tls = true
+link-mode = "copy"
 
 
 [project.scripts]

@@ -143,13 +143,21 @@ After installation, the skills will be available as slash commands (e.g., `/agen
 
 | File | Purpose |
 |------|---------|
-| `agent_server/agent.py` | Agent logic, model, instructions, MCP servers |
+| `agent_server/agent.py` | Agent logic, model, MCP servers |
+| `agent_server/tools/` | Agent code tools, one file per tool, registered in `tools/__init__.py` (`TOOLS`) |
+| `agent_server/prompts/` | Prompts as Markdown files, loaded with `load_prompt("<name>")` (`system.md` is the main agent's system prompt) |
 | `agent_server/start_server.py` | FastAPI server + MLflow setup |
 | `agent_server/evaluate_agent.py` | Agent evaluation with MLflow scorers |
 | `databricks.yml` | Bundle config & resource permissions |
 | `.github/workflows/deploy.yml` | GitHub Actions workflow to deploy this app (synced from `.scripts/source/.github/workflows/`) |
 | `scripts/quickstart.py` | One-command setup script |
 | `scripts/discover_tools.py` | Discovers available workspace resources |
+
+## Project Conventions
+
+- **Tools:** add each new tool as its own file in `agent_server/tools/` and register it in `TOOLS` in `agent_server/tools/__init__.py`.
+- **Prompts:** keep every prompt (main agent and any subagents) as a Markdown file in `agent_server/prompts/`, never inline in Python.
+- **Keep the system prompt in sync:** whenever a feature changes what the agent can do (a tool added, removed or changed, a subagent added, new behavior), update `agent_server/prompts/system.md` in the same change so it describes the agent's current capabilities and limits.
 
 ---
 

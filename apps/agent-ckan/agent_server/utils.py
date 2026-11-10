@@ -47,7 +47,10 @@ async def process_agent_astream_events(
     async for event in async_stream:
         if event[0] == "updates":
             for node_data in event[1].values():
-                if len(node_data.get("messages", [])) > 0:
+                # Middleware nodes (e.g. in deep agents) may emit None or non-message updates
+                if not isinstance(node_data, dict) or not isinstance(node_data.get("messages"), list):
+                    continue
+                if len(node_data["messages"]) > 0:
                     for msg in node_data["messages"]:
                         if isinstance(msg, ToolMessage) and not isinstance(msg.content, str):
                             msg.content = json.dumps(msg.content)

@@ -43,6 +43,18 @@ def check_port_available(port: int) -> bool:
         return True  # Nothing listening = available
 
 
+def use_git_bash_for_npm_scripts():
+    """On Windows, run npm scripts with Git Bash so POSIX syntax (e.g. `VAR=x cmd`) works."""
+    if os.name != "nt" or os.environ.get("npm_config_script_shell"):
+        return
+    git = shutil.which("git")
+    if not git:
+        return
+    bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+    if bash.exists():
+        os.environ["npm_config_script_shell"] = str(bash)
+
+
 class ProcessManager:
     def __init__(self, port=8000, no_ui=False):
         self.backend_process = None
@@ -172,7 +184,14 @@ class ProcessManager:
     def start_process(self, cmd, name, log_file, patterns, cwd=None):
         print(f"Starting {name}...")
         process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=cwd
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            cwd=cwd,
         )
 
         thread = threading.Thread(
@@ -185,7 +204,7 @@ class ProcessManager:
         print(f"\nLast 50 lines of {log_path}:")
         print("-" * 40)
         try:
-            lines = Path(log_path).read_text().splitlines()
+            lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
             print("\n".join(lines[-50:]))
         except FileNotFoundError:
             print(f"(no {log_path} found)")
@@ -198,6 +217,12 @@ class ProcessManager:
 
         for proc in [self.backend_process, self.frontend_process]:
             if proc:
+                if os.name == "nt":
+                    # terminate() only kills the direct child (uv/npm), orphaning the real server
+                    subprocess.run(
+                        ["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True
+                    )
+                    continue
                 try:
                     proc.terminate()
                     proc.wait(timeout=5)
@@ -221,11 +246,13 @@ class ProcessManager:
             else:
                 # Set API_PROXY environment variable for frontend to connect to backend
                 os.environ["API_PROXY"] = f"http://localhost:{self.port}/invocations"
+                # Trust the OS certificate store (needed behind TLS-inspecting corporate proxies)
+                os.environ.setdefault("NODE_USE_SYSTEM_CA", "1")
 
         # Open log files
-        self.backend_log = open("backend.log", "w", buffering=1)
+        self.backend_log = open("backend.log", "w", buffering=1, encoding="utf-8")
         if not self.no_ui:
-            self.frontend_log = open("frontend.log", "w", buffering=1)
+            self.frontend_log = open("frontend.log", "w", buffering=1, encoding="utf-8")
 
         try:
             # Build backend command, passing through all arguments
@@ -241,17 +268,25 @@ class ProcessManager:
             if not self.no_ui:
                 # Setup and start frontend
                 frontend_dir = Path("e2e-chatbot-app-next")
-                for cmd, desc in [("npm install", "install"), ("npm run build", "build")]:
+                # Resolve full path so Windows can launch npm.cmd
+                npm = shutil.which("npm") or "npm"
+                use_git_bash_for_npm_scripts()
+                for args, desc in [(["install"], "install"), (["run", "build"], "build")]:
                     print(f"Running npm {desc}...")
                     result = subprocess.run(
-                        cmd.split(), cwd=frontend_dir, capture_output=True, text=True
+                        [npm, *args],
+                        cwd=frontend_dir,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
                     )
                     if result.returncode != 0:
                         print(f"npm {desc} failed: {result.stderr}")
                         return 1
 
                 self.frontend_process = self.start_process(
-                    ["npm", "run", "start"],
+                    [npm, "run", "start"],
                     "frontend",
                     self.frontend_log,
                     FRONTEND_READY,
